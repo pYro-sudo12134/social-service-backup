@@ -63,3 +63,5 @@
 - **React+Axios**
 
 honorable mention: мне надо было написать ещё Makefile, чтобы не возиться с ручной загрузкой данных на ноду kind, но его польза не слишком велика
+
+<!-- если на ориг ссылку, то это https://github.com/pYro-sudo/social-service -->

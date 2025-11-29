@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: social-network-db
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+    version: blue
+  ports:
+    - name: client
+      port: 9092
+      protocol: TCP
+      targetPort: 9092
+    - name: controller
+      port: 9093
+      protocol: TCP
+      targetPort: 9093
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: social-network-db
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: kafka
+        version: blue
+        resource-intensive: "true"
+        database: "true"
+    spec:
+      tolerations:
+        - key: "messaging"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: database
+                    operator: In
+                    values: ["true"]
+      hostname: kafka-0
+      subdomain: kafka
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - "sh"
+            - "-c"
+            - |
+              NODE_ID=$(hostname | sed 's/kafka-//')
+              echo "Node ID: $NODE_ID"
+              
+              # Создаем директории
+              mkdir -p /shared/config /shared/data
+              
+              # Генерируем конфигурацию с правильным node.id
+              cat > /shared/config/server.properties << EOF
+              # KRaft Configuration
+              process.roles=broker,controller
+              node.id=${NODE_ID}
+              controller.listener.names=CONTROLLER
+              controller.quorum.voters=${NODE_ID}@kafka-${NODE_ID}.kafka.social-network-db.svc.cluster.local:9093
+              
+              # Listeners
+              listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+              advertised.listeners=PLAINTEXT://kafka-${NODE_ID}.kafka.social-network-db.svc.cluster.local:9092
+              listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+              inter.broker.listener.name=PLAINTEXT
+              
+              # Storage
+              log.dirs=/shared/data
+              
+              # Topics
+              num.partitions=1
+              offsets.topic.replication.factor=1
+              transaction.state.log.replication.factor=1
+              transaction.state.log.min.isr=1
+              auto.create.topics.enable=true
+              default.replication.factor=1
+              
+              # Log retention
+              log.retention.hours=168
+              
+              # Other settings
+              num.network.threads=3
+              num.io.threads=8
+              socket.send.buffer.bytes=102400
+              socket.receive.buffer.bytes=102400
+              socket.request.max.bytes=104857600
+              EOF
+              
+              # Генерируем уникальный cluster.id если его нет
+              if [ ! -f /shared/config/cluster.id ]; then
+                KAFKA_CLUSTER_ID="$(/opt/kafka/bin/kafka-storage.sh random-uuid)"
+                echo $KAFKA_CLUSTER_ID > /shared/config/cluster.id
+                echo "Generated new cluster ID: $KAFKA_CLUSTER_ID"
+              
+                # Форматируем storage
+                /opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c /shared/config/server.properties
+              else
+                KAFKA_CLUSTER_ID="$(cat /shared/config/cluster.id)"
+                echo "Using existing cluster ID: $KAFKA_CLUSTER_ID"
+              fi
+              
+              # Запускаем Kafka в KRaft режиме
+              echo "Starting Kafka in KRaft mode..."
+              echo "Final configuration:"
+              cat /shared/config/server.properties
+              /opt/kafka/bin/kafka-server-start.sh /shared/config/server.properties
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /shared/data
+            - name: shared-config
+              mountPath: /shared/config
+      volumes:
+        - name: kafka-data
+          emptyDir: {}
+        - name: shared-config
+          emptyDir: {}

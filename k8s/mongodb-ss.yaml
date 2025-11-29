@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: social-network-db
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      tolerations:
+        - key: "database"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: type
+                    operator: In
+                    values: ["database"]
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: mongodb
+          image: mongo:6.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: password
+          args:
+            - "--bind_ip_all"
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  username=$(echo $MONGO_INITDB_ROOT_USERNAME)
+                  password=$(echo $MONGO_INITDB_ROOT_PASSWORD)
+                  mongosh --eval "db.adminCommand('ping')" -u "$username" -p "$password" --authenticationDatabase "admin"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  username=$(echo $MONGO_INITDB_ROOT_USERNAME)
+                  password=$(echo $MONGO_INITDB_ROOT_PASSWORD)
+                  mongosh --eval "db.adminCommand('ping')" -u "$username" -p "$password" --authenticationDatabase "admin"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: social-network-db
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+  clusterIP: None

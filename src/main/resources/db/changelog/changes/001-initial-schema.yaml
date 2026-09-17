@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 000-1
+      author: losik
+      runOrder: first
+      runAlways: true
+      changes:
+        - sql:
+            sql: CREATE SCHEMA IF NOT EXISTS gallery
+            comment: Создание схемы galley для таблицы images

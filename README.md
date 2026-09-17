@@ -8,11 +8,11 @@
 
 ### Микросервисы
 
-- **User Service** (`8081`) - управление пользователями и аутентификация
-- **Image Service** (`8082`) - загрузка и управление изображениями
-- **Comment-Like Service** (`8083`) - система комментариев и лайков
-- **Activity Service** (`8085`) - отслеживание пользовательской активности
-- **API Gateway** (`8080`) - единая точка входа, маршрутизация и аутентификация
+- [**User Service**](https://github.com/pYro-sudo12134/social-service-backup/tree/user-service) (`8081`) - управление пользователями и аутентификация
+- [**Image Service**](https://github.com/pYro-sudo12134/social-service-backup/tree/image-service) (`8082`) - загрузка и управление изображениями
+- [**Comment-Like Service**](https://github.com/pYro-sudo12134/social-service-backup/tree/comment-like-service) (`8083`) - система комментариев и лайков
+- [**Activity Service**](https://github.com/pYro-sudo12134/social-service-backup/tree/activity-service) (`8085`) - отслеживание пользовательской активности
+- [**API Gateway**](https://github.com/pYro-sudo12134/social-service-backup/tree/gateway) (`8080`) - единая точка входа, маршрутизация и аутентификация
 
 ## Технологический стек
 
@@ -63,5 +63,6 @@
 - **React+Axios**
 
 honorable mention: мне надо было написать ещё Makefile, чтобы не возиться с ручной загрузкой данных на ноду kind, но его польза не слишком велика
+
 
 <!-- если на ориг ссылку, то это https://github.com/pYro-sudo/social-service -->
